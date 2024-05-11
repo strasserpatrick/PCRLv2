@@ -76,9 +76,9 @@ class setup_config():
                  scale=None,
                  DATA_DIR=None,
                  SAVE_DIR=None,
-                 train_fold=[0, 1, 2, 3, 4],
-                 valid_fold=[5, 6],
-                 test_fold=[7, 8, 9],
+                 train_fold=[0, 8],
+                 valid_fold=[],
+                 test_fold=[],
                  len_depth=None,
                  lung_min=0.7,
                  lung_max=1.0,
@@ -347,5 +347,4 @@ def load_sitk_with_resample(img_path):
     newvol = resampler.Execute(vol)
     return newvol
 
-with Pool(5) as p:
-    p.map(get_self_learning_data, [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]])
+get_self_learning_data([0, 8])
