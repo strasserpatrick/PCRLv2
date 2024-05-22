@@ -64,8 +64,8 @@ class DataGenerator:
         print('using the reverse_aug pretrain on luna')
         args = self.args
         dataloader = {}
-        train_fold = [0, 1, 2, 3, 4, 5, 6]
-        valid_fold = [7, 8, 9]
+        train_fold = [0]
+        valid_fold = [8]
         file_list = get_luna_pretrain_list(args.ratio)
         x_train, x_valid, _ = get_luna_list(args, train_fold, valid_fold, valid_fold, suffix='_global_',
                                             file_list=file_list)

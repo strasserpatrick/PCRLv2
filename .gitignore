@@ -1,0 +1,5 @@
+LUNA16*
+.vscode
+.idea
+**/__pycache__
+BraTS_preprocessed

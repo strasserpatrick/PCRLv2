@@ -43,7 +43,7 @@ def train_pcrlv2_3d(args, data_loader, out_channel=3):
     train_loader = data_loader['train']
     # create model and optimizer
     model = PCRLv23d()
-    model = model.cuda()
+    # model = model.cuda()
 
     optimizer = torch.optim.SGD(model.parameters(),
                                 lr=args.lr,
@@ -51,11 +51,11 @@ def train_pcrlv2_3d(args, data_loader, out_channel=3):
                                 weight_decay=args.weight_decay)
     if args.amp:
         model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
-    model = nn.DataParallel(model)
+    # model = nn.DataParallel(model)
 
     criterion = nn.MSELoss().cuda()
     cosine = nn.CosineSimilarity().cuda()
-    cudnn.benchmark = True
+    # cudnn.benchmark = True
 
     for epoch in range(0, args.epochs + 1):
 
@@ -80,7 +80,7 @@ def train_pcrlv2_3d(args, data_loader, out_channel=3):
             torch.save(state, save_file)
             # help release GPU memory
             del state
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
 
 
 def cos_loss(cosine, output1, output2):
@@ -110,9 +110,9 @@ def train_pcrlv2_inner(args, epoch, train_loader, model, optimizer, criterion, c
         data_time.update(time.time() - end)
 
         bsz = input1.size(0)
-        x1 = input1.float().cuda()
-        x2 = input2.float().cuda()
-        gt = gt.float().cuda()
+        x1 = input1.float()# .cuda()
+        x2 = input2.float()# .cuda()
+        gt = gt.float()# .cuda()
         mask1, decoder_outputs1, middle_masks1 = model(x1)
         mask2, decoder_outputs2, _ = model(x2)
         # print(len(local_views), local_views[0].shape)

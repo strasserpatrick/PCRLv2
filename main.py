@@ -41,8 +41,8 @@ if __name__ == '__main__':
     if not os.path.exists(args.output):
         os.makedirs(args.output)
     print(args)
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
-    torch.backends.cudnn.benchmark = True
+    # os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
+    # torch.backends.cudnn.benchmark = True
     data_loader = get_dataloader(args)
     if args.model == 'pcrlv2' and args.phase == 'pretask' and args.d == 2:
         train_pcrlv2(args, data_loader)
