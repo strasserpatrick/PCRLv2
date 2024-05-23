@@ -7,7 +7,6 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
 
 import sys
-import random
 
 import numpy as np
 import SimpleITK as sitk
@@ -32,8 +31,8 @@ parser.add_option("--save", dest="save", help="the directory of processed 3D cub
 parser.add_option("--scale", dest="scale", help="scale of the generator", default=16, type="int")
 (options, args) = parser.parse_args()
 
-seed = 1
-random.seed(seed)
+seed = 42
+np.random.seed(seed)
 
 assert options.data is not None
 assert options.save is not None
@@ -157,13 +156,13 @@ def crop_pair(img_array):
             if size_x - crop_rows2 - 1 - config.len_border <= config.len_border:
                 crop_rows2 -= 32
                 crop_cols2 -= 32
-            start_x1 = random.randint(0 + config.len_border, size_x - crop_rows1 - 1 - config.len_border)
-            start_y1 = random.randint(0 + config.len_border, size_y - crop_cols1 - 1 - config.len_border)
-            start_z1 = random.randint(0 + config.len_border_z,
+            start_x1 = np.random.randint(0 + config.len_border, size_x - crop_rows1 - 1 - config.len_border)
+            start_y1 = np.random.randint(0 + config.len_border, size_y - crop_cols1 - 1 - config.len_border)
+            start_z1 = np.random.randint(0 + config.len_border_z,
                                       size_z - crop_deps1 - config.len_depth - 1 - config.len_border_z)
-            start_x2 = random.randint(0 + config.len_border, size_x - crop_rows2 - 1 - config.len_border)
-            start_y2 = random.randint(0 + config.len_border, size_y - crop_cols2 - 1 - config.len_border)
-            start_z2 = random.randint(0 + config.len_border_z,
+            start_x2 = np.random.randint(0 + config.len_border, size_x - crop_rows2 - 1 - config.len_border)
+            start_y2 = np.random.randint(0 + config.len_border, size_y - crop_cols2 - 1 - config.len_border)
+            start_z2 = np.random.randint(0 + config.len_border_z,
                                       size_z - crop_deps2 - config.len_depth - 1 - config.len_border_z)
             box1 = (start_x1, start_x1 + crop_rows1, start_y1, start_y1 + crop_cols1, start_z1, start_z1 + crop_deps1)
             box2 = (start_x2, start_x2 + crop_rows2, start_y2, start_y2 + crop_cols2, start_z2, start_z2 + crop_deps2)
