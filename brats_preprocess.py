@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from glob import glob
 from optparse import OptionParser
 from pathlib import Path
+from pprint import pprint
 
 import SimpleITK as sitk
 import numpy as np
@@ -41,14 +42,8 @@ class PreprocessingConfig:
     lung_min: float = 0.7
     lung_max: float = 0.15
 
-    def display(self):
-        print("Setup Config:")
-        for field, value in self.__dict__.items():
-            print(f"{field}: {value}")
-        print("\n")
 
-
-class Preprocessor:
+class PCRLv2Preprocessor:
     def __init__(self, config):
         self.config = config
 
@@ -118,7 +113,7 @@ class Preprocessor:
                     start_x1, start_x1 + crop_rows1, start_y1, start_y1 + crop_cols1, start_z1, start_z1 + crop_deps1)
                 box2 = (
                     start_x2, start_x2 + crop_rows2, start_y2, start_y2 + crop_cols2, start_z2, start_z2 + crop_deps2)
-                iou = self.cal_iou(box1, box2)
+                iou = self.calculate_iou(box1, box2)
                 # print(iou, start_x1, start_y1, start_z1, start_x2, start_y2, start_z2)
                 if iou > 0.3:
                     break
@@ -233,30 +228,39 @@ class Preprocessor:
         img_array = img_array.transpose(2, 1, 0)
         self.local_global_3d_cube_generator(img_array, save_dir, img_name[:-7])
 
-    def cal_iou(self, box1, box2):
+    def calculate_iou(self, box1, box2):
         """
-        :param box1: = [xmin1, ymin1, xmax1, ymax1]
-        :param box2: = [xmin2, ymin2, xmax2, ymax2]
-        :return:
-        """
-        xmin1, xmax1, ymin1, ymax1, zmin1, zmax1 = box1
-        xmin2, xmax2, ymin2, ymax2, zmin2, zmax2 = box2
-        # 计算每个矩形的面积
-        s1 = (xmax1 - xmin1) * (ymax1 - ymin1) * (zmax1 - zmin1)  # C的面积
-        s2 = (xmax2 - xmin2) * (ymax2 - ymin2) * (zmax2 - zmin2)  # G的面积
+        Calculates Intersection over Union for two boxes
 
-        # 计算相交矩形
-        xmin = max(xmin1, xmin2)
-        ymin = max(ymin1, ymin2)
-        xmax = min(xmax1, xmax2)
-        ymax = min(ymax1, ymax2)
-        zmin = max(zmin1, zmin2)
-        zmax = min(zmax1, zmax2)
-        w = max(0, xmax - xmin)
-        h = max(0, ymax - ymin)
-        d = max(0, zmax - zmin)
-        area = w * h * d  # C∩G的面积
-        iou = area / (s1 + s2 - area)
+        :param box1: tuple, coordinates of the first box
+        :param box2: tuple, coordinates of the second box
+
+        :return: float, Intersection over Union value
+        """
+
+        # unpack the coordinates from boxes
+        x_start_box1, x_end_box1, y_start_box1, y_end_box1, z_start_box1, z_end_box1 = box1
+        x_start_box2, x_end_box2, y_start_box2, y_end_box2, z_start_box2, z_end_box2 = box2
+
+        # compute the volume of boxes
+        area_box1 = (x_end_box1 - x_start_box1) * (y_end_box1 - y_start_box1) * (z_end_box1 - z_start_box1)
+        area_box2 = (x_end_box2 - x_start_box2) * (y_end_box2 - y_start_box2) * (z_end_box2 - z_start_box2)
+
+        # find the intersection box and compute the volume
+        x_min = max(x_start_box1, x_start_box2)
+        y_min = max(y_start_box1, y_start_box2)
+        x_max = min(x_end_box1, x_end_box2)
+        y_max = min(y_end_box1, y_end_box2)
+        z_min = max(z_start_box1, z_start_box2)
+        z_max = min(z_end_box1, z_end_box2)
+
+        intersection_w = max(0, x_max - x_min)
+        intersection_h = max(0, y_max - y_min)
+        intersection_d = max(0, z_max - z_min)
+        intersection_area = intersection_w * intersection_h * intersection_d
+
+        # compute the intersection over union
+        iou = intersection_area / (area_box1 + area_box2 - intersection_area)
         return iou
 
     def load_sitk_with_resample(self, img_path):
@@ -325,7 +329,10 @@ def parse_args():
 def run_preprocessing():
     config = parse_args()
 
-    pp = Preprocessor(config)
+    print("Preprocessing configuration:")
+    pprint(config)
+
+    pp = PCRLv2Preprocessor(config)
     pp.get_self_learning_data()
 
 
