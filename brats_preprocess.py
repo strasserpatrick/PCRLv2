@@ -17,22 +17,27 @@ root_dir = Path(__file__).parent
 np.random.seed(42)
 
 # Preprocessing parameters
-col_size = [(96, 96, 64), (96, 96, 96), (112, 112, 64), (64, 64, 32)]
-input_rows, input_cols, input_depth = (64, 64, 32)
-local_col_size = [(32, 32, 16), (16, 16, 16), (32, 32, 32), (8, 8, 8)]
-local_input_rows, local_input_cols, local_input_depth = (16, 16, 16)
+col_size_sampling_variants = [(96, 96, 64), (96, 96, 96), (112, 112, 64), (64, 64, 32)]
+local_col_size_sampling_variants = [(32, 32, 16), (16, 16, 16), (32, 32, 32), (8, 8, 8)]
 
 
 @dataclass
 class PreprocessingConfig:
+    """
+    Configuration for the preprocessing
+    TODO: add descriptions for each parameter
+    """
     input_rows: int
     input_cols: int
-    input_deps: int
+    input_depth: int
     crop_rows: int
     crop_cols: int
     scale: float
     DATA_DIR: str
     SAVE_DIR: str
+    local_input_rows: int = 16
+    local_input_cols: int = 16
+    local_input_depth: int = 16
     hu_max: float = 1000.0
     hu_min: float = -1000.0
     HU_thred: float = (-150.0 - hu_min) / (hu_max - hu_min)
@@ -87,10 +92,10 @@ class PCRLv2Preprocessor:
                 img_array2 = np.pad(img_array2, padding, mode='constant', constant_values=0)
                 size_z += -pad + 1
             while True:
-                size_index1 = np.random.randint(0, len(col_size))
-                crop_rows1, crop_cols1, crop_deps1 = col_size[size_index1]
-                size_index2 = np.random.randint(0, len(col_size))
-                crop_rows2, crop_cols2, crop_deps2 = col_size[size_index2]
+                size_index1 = np.random.randint(0, len(col_size_sampling_variants))
+                crop_rows1, crop_cols1, crop_deps1 = col_size_sampling_variants[size_index1]
+                size_index2 = np.random.randint(0, len(col_size_sampling_variants))
+                crop_rows2, crop_cols2, crop_deps2 = col_size_sampling_variants[size_index2]
                 if size_x - crop_rows1 - 1 - self.config.len_border <= self.config.len_border:
                     crop_rows1 -= 32
                     crop_cols1 -= 32
@@ -128,23 +133,25 @@ class PCRLv2Preprocessor:
                            start_z2: start_z2 + crop_deps2 + self.config.len_depth,
                            ]
 
-            if crop_rows1 != input_rows or crop_cols1 != input_cols or crop_deps1 != input_depth:
+            if crop_rows1 != self.config.input_rows or crop_cols1 != self.config.input_cols or crop_deps1 != self.config.input_depth:
                 crop_window1 = resize(crop_window1,
-                                      (input_rows, input_cols, input_depth + self.config.len_depth),
+                                      (self.config.input_rows, self.config.input_cols,
+                                       self.config.input_depth + self.config.len_depth),
                                       preserve_range=True,
                                       )
-            if crop_rows2 != input_rows or crop_cols2 != input_cols or crop_deps2 != input_depth:
+            if crop_rows2 != self.config.input_rows or crop_cols2 != self.config.input_cols or crop_deps2 != self.config.input_depth:
                 crop_window2 = resize(crop_window2,
-                                      (input_rows, input_cols, input_depth + self.config.len_depth),
+                                      (self.config.input_rows, self.config.input_cols,
+                                       self.config.input_depth + self.config.len_depth),
                                       preserve_range=True,
                                       )
-            t_img1 = np.zeros((input_rows, input_cols, input_depth), dtype=float)
-            d_img1 = np.zeros((input_rows, input_cols, input_depth), dtype=float)
-            t_img2 = np.zeros((input_rows, input_cols, input_depth), dtype=float)
-            d_img2 = np.zeros((input_rows, input_cols, input_depth), dtype=float)
-            for d in range(input_depth):
-                for i in range(input_rows):
-                    for j in range(input_cols):
+            t_img1 = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
+            d_img1 = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
+            t_img2 = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
+            d_img2 = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
+            for d in range(self.config.input_depth):
+                for i in range(self.config.input_rows):
+                    for j in range(self.config.input_cols):
                         for k in range(self.config.len_depth):
                             if crop_window1[i, j, d + k] >= self.config.HU_thred:
                                 t_img1[i, j, d] = crop_window1[i, j, d + k]
@@ -152,9 +159,9 @@ class PCRLv2Preprocessor:
                                 break
                             if k == self.config.len_depth - 1:
                                 d_img1[i, j, d] = k
-            for d in range(input_depth):
-                for i in range(input_rows):
-                    for j in range(input_cols):
+            for d in range(self.config.input_depth):
+                for i in range(self.config.input_rows):
+                    for j in range(self.config.input_cols):
                         for k in range(self.config.len_depth):
                             if crop_window2[i, j, d + k] >= self.config.HU_thred:
                                 t_img2[i, j, d] = crop_window2[i, j, d + k]
@@ -187,19 +194,21 @@ class PCRLv2Preprocessor:
                 local_x = np.random.randint(max(x_min - 3, 0), min(x_max + 3, size_x))
                 local_y = np.random.randint(max(y_min - 3, 0), min(y_max + 3, size_y))
                 local_z = np.random.randint(max(z_min - 3, 0), min(z_max + 3, size_z))
-                local_size_index = np.random.randint(0, len(local_col_size))
-                local_crop_rows, local_crop_cols, local_crop_deps = local_col_size[local_size_index]
+                local_size_index = np.random.randint(0, len(local_col_size_sampling_variants))
+                local_crop_rows, local_crop_cols, local_crop_deps = local_col_size_sampling_variants[local_size_index]
                 local_window = img_array1[local_x: local_x + local_crop_rows,
                                local_y: local_y + local_crop_cols,
                                local_z: local_z + local_crop_deps
                                ]
                 # if local_crop_rows != local_input_rows or local_crop_cols != local_input_cols or local_crop_deps != local_input_depth:
                 local_window = resize(local_window,
-                                      (local_input_rows, local_input_cols, local_input_depth),
+                                      (self.config.local_input_rows, self.config.local_input_cols,
+                                       self.config.local_input_depth),
                                       preserve_range=True,
                                       )
                 local_windows.append(local_window)
-            return crop_window1[:, :, :input_depth], crop_window2[:, :, :input_depth], np.stack(local_windows, axis=0)
+            return crop_window1[:, :, :self.config.input_depth], crop_window2[:, :, :self.config.input_depth], np.stack(
+                local_windows, axis=0)
 
     def get_self_learning_data(self):
         """
@@ -302,7 +311,7 @@ def parse_args():
     parser = OptionParser()
     parser.add_option("--input_rows", dest="input_rows", help="input rows", default=64, type="int")
     parser.add_option("--input_cols", dest="input_cols", help="input cols", default=64, type="int")
-    parser.add_option("--input_deps", dest="input_deps", help="input deps", default=32, type="int")
+    parser.add_option("--input_depth", dest="input_depth", help="input depth", default=32, type="int")
     parser.add_option("--crop_rows", dest="crop_rows", help="crop rows", default=64, type="int")
     parser.add_option("--crop_cols", dest="crop_cols", help="crop cols", default=64, type="int")
     parser.add_option("--data", dest="data", help="the directory of BraTS dataset", default='BraTS_subset',
@@ -315,7 +324,7 @@ def parse_args():
     config = PreprocessingConfig(
         input_rows=options.input_rows,
         input_cols=options.input_cols,
-        input_deps=options.input_deps,
+        input_depth=options.input_depth,
         crop_rows=options.crop_rows,
         crop_cols=options.crop_cols,
         scale=options.scale,
