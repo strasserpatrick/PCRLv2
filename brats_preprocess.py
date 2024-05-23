@@ -323,6 +323,6 @@ def load_sitk_with_resample(img_path):
     newvol = resampler.Execute(vol)
     return newvol
 
+
 if __name__ == "__main__":
-    with Pool(8) as p:
-        get_self_learning_data()
+    get_self_learning_data()
