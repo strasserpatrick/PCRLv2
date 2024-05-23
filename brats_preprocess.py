@@ -1,12 +1,13 @@
 import os
 import sys
 import warnings
+from dataclasses import dataclass
 from glob import glob
 from optparse import OptionParser
 from pathlib import Path
 
-import numpy as np
 import SimpleITK as sitk
+import numpy as np
 from skimage.transform import resize
 from tqdm import tqdm
 
@@ -24,52 +25,29 @@ local_col_size = [(32, 32, 16), (16, 16, 16), (32, 32, 32), (8, 8, 8)]
 local_input_rows, local_input_cols, local_input_depth = (16, 16, 16)
 
 
-class setup_config():
-    hu_max = 1000.0
-    hu_min = -1000.0
-    HU_thred = (-150.0 - hu_min) / (hu_max - hu_min)
-
-    def __init__(self,
-                 input_rows=None,
-                 input_cols=None,
-                 input_deps=None,
-                 crop_rows=None,
-                 crop_cols=None,
-                 len_border=None,
-                 len_border_z=None,
-                 scale=None,
-                 DATA_DIR=None,
-                 SAVE_DIR=None,
-                 train_fold=[0, 8],
-                 valid_fold=[],
-                 test_fold=[],
-                 len_depth=None,
-                 lung_min=0.7,
-                 lung_max=1.0,
-                 ):
-        self.input_rows = input_rows
-        self.input_cols = input_cols
-        self.input_deps = input_deps
-        self.crop_rows = crop_rows
-        self.crop_cols = crop_cols
-        self.len_border = len_border
-        self.len_border_z = len_border_z
-        self.scale = scale
-        self.DATA_DIR = DATA_DIR
-        self.train_fold = train_fold
-        self.valid_fold = valid_fold
-        self.test_fold = test_fold
-        self.len_depth = len_depth
-        self.lung_min = lung_min
-        self.lung_max = lung_max
-        self.SAVE_DIR = SAVE_DIR
+@dataclass
+class PreprocessingConfig:
+    input_rows: int
+    input_cols: int
+    input_deps: int
+    crop_rows: int
+    crop_cols: int
+    scale: float
+    DATA_DIR: str
+    SAVE_DIR: str
+    hu_max: float = 1000.0
+    hu_min: float = -1000.0
+    HU_thred: float = (-150.0 - hu_min) / (hu_max - hu_min)
+    len_border: int = 70
+    len_border_z: int = 15
+    len_depth: int = 3
+    lung_min: float = 0.7
+    lung_max: float = 0.15
 
     def display(self):
-        """Display Configuration values."""
-        print("\nConfigurations:")
-        for a in dir(self):
-            if not a.startswith("__") and not callable(getattr(self, a)):
-                print("{:30} {}".format(a, getattr(self, a)))
+        print("Setup Config:")
+        for field, value in self.__dict__.items():
+            print(f"{field}: {value}")
         print("\n")
 
 
@@ -225,16 +203,31 @@ class Preprocessor:
             return crop_window1[:, :, :input_depth], crop_window2[:, :, :input_depth], np.stack(local_windows, axis=0)
 
     def get_self_learning_data(self):
+        """
+        Main function to process all images in the dataset
+
+        :return: None
+        """
         brats_path = str(root_dir / self.config.DATA_DIR)
         file_list = glob(os.path.join(brats_path, '*.nii.gz'))
         save_dir = str(root_dir / self.config.SAVE_DIR)
         for i, img_file in enumerate(tqdm(file_list)):
-            img_name = os.path.split(img_file)[-1]
-            img_array = self.load_sitk_with_resample(img_file)
-            img_array = sitk.GetArrayFromImage(img_array)
-            img_array = img_array.transpose(2, 1, 0)
-            # print(img_array.shape)
-            self.infinite_generator_from_one_volume(img_array, save_dir, img_name[:-7])
+            self.process_image(img_file, save_dir)
+
+    def process_image(self, img_file, save_dir):
+        """
+        Loads image from file, resamples it and generates 3D cubes
+
+        :param img_file: str, path to image file
+        :param save_dir: str, path to save directory
+
+        :return: None
+        """
+        img_name = os.path.split(img_file)[-1]
+        img_array = self.load_sitk_with_resample(img_file)
+        img_array = sitk.GetArrayFromImage(img_array)
+        img_array = img_array.transpose(2, 1, 0)
+        self.infinite_generator_from_one_volume(img_array, save_dir, img_name[:-7])
 
     def cal_iou(self, box1, box2):
         """
@@ -303,32 +296,22 @@ def parse_args():
     parser.add_option("--scale", dest="scale", help="scale of the generator", default=16, type="int")
     (options, _) = parser.parse_args()
 
-    return options
-
-
-def create_config(options):
-    config = setup_config(input_rows=options.input_rows,
-                          input_cols=options.input_cols,
-                          input_deps=options.input_deps,
-                          crop_rows=options.crop_rows,
-                          crop_cols=options.crop_cols,
-                          scale=options.scale,
-                          len_border=70,
-                          len_border_z=15,
-                          len_depth=3,
-                          lung_min=0.7,
-                          lung_max=0.15,
-                          DATA_DIR=options.data,
-                          SAVE_DIR=options.save
-                          )
-    config.display()
+    config = PreprocessingConfig(
+        input_rows=options.input_rows,
+        input_cols=options.input_cols,
+        input_deps=options.input_deps,
+        crop_rows=options.crop_rows,
+        crop_cols=options.crop_cols,
+        scale=options.scale,
+        DATA_DIR=options.data,
+        SAVE_DIR=options.save
+    )
 
     return config
 
 
 def run_preprocessing():
-    options = parse_args()
-    config = create_config(options)
+    config = parse_args()
 
     pp = Preprocessor(config)
     pp.get_self_learning_data()
