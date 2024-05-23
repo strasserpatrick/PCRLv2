@@ -1,6 +1,5 @@
 import os
 import sys
-import warnings
 from dataclasses import dataclass
 from glob import glob
 from optparse import OptionParser
@@ -12,8 +11,6 @@ from skimage.transform import resize
 from tqdm import tqdm
 
 # Global constants
-warnings.filterwarnings('ignore')
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 sys.setrecursionlimit(40000)
 root_dir = Path(__file__).parent
 np.random.seed(42)
@@ -55,21 +52,28 @@ class Preprocessor:
     def __init__(self, config):
         self.config = config
 
-    def infinite_generator_from_one_volume(self, img_array, save_dir, name):
+    def local_global_3d_cube_generator(self, img_array, save_dir, file_name):
+        """
+        Generates 3D cubes from the image and saves them to the disk
+        These consist of a global cube and 6 local cubes
+
+        :param img_array: np.array, 3D image
+        :param save_dir: str, path to save directory
+        :param file_name: str, name of the file
+
+        :return: None
+        """
+        # Normalize HU values
         img_array[img_array < self.config.hu_min] = self.config.hu_min
         img_array[img_array > self.config.hu_max] = self.config.hu_max
         img_array = 1.0 * (img_array - self.config.hu_min) / (self.config.hu_max - self.config.hu_min)
-        num_pair = 0
-        while True:
+
+        # generate 3d pairs
+        for i in range(self.config.scale):
             crop_window1, crop_window2, local_windows = self.crop_pair(img_array)
             crop_window = np.stack((crop_window1, crop_window2), axis=0)
-            # crop_window = np.concatenate([crop_window, local_windows], axis=0)
-            # print(crop_window.shape)
-            np.save(os.path.join(save_dir, name + '_global_' + str(num_pair) + '.npy'), crop_window)
-            np.save(os.path.join(save_dir, name + '_local_' + str(num_pair) + '.npy'), local_windows)
-            num_pair += 1
-            if num_pair == self.config.scale:
-                break
+            np.save(os.path.join(save_dir, file_name + '_global_' + str(i) + '.npy'), crop_window)
+            np.save(os.path.join(save_dir, file_name + '_local_' + str(i) + '.npy'), local_windows)
 
     def crop_pair(self, img_array):
         while True:
@@ -227,7 +231,7 @@ class Preprocessor:
         img_array = self.load_sitk_with_resample(img_file)
         img_array = sitk.GetArrayFromImage(img_array)
         img_array = img_array.transpose(2, 1, 0)
-        self.infinite_generator_from_one_volume(img_array, save_dir, img_name[:-7])
+        self.local_global_3d_cube_generator(img_array, save_dir, img_name[:-7])
 
     def cal_iou(self, box1, box2):
         """
@@ -256,11 +260,19 @@ class Preprocessor:
         return iou
 
     def load_sitk_with_resample(self, img_path):
+        """
+        Loads image from file and resamples it, so that the spacing is 1x1x1
+        This means that the image will be isotropic.
+
+        :param img_path: str, path to image file
+
+        :return: SimpleITK image with isotropic spacing of 1x1x1
+        """
+
         outsize = [0, 0, 0]
         outspacing = [1, 1, 1]
 
         vol = sitk.ReadImage(img_path)
-        tmp = sitk.GetArrayFromImage(vol)
         inputsize = vol.GetSize()
         inputspacing = vol.GetSpacing()
 
@@ -278,8 +290,8 @@ class Preprocessor:
         resampler.SetOutputSpacing(outspacing)
         resampler.SetOutputDirection(vol.GetDirection())
         resampler.SetSize(outsize)
-        newvol = resampler.Execute(vol)
-        return newvol
+        new_vol = resampler.Execute(vol)
+        return new_vol
 
 
 def parse_args():
