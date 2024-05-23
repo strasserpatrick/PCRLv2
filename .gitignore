@@ -3,3 +3,5 @@ LUNA16*
 .idea
 **/__pycache__
 BraTS_preprocessed
+BraTS_ground_truth
+BraTS_subset
