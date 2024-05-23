@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from glob import glob
 from multiprocessing import Pool
 from optparse import OptionParser
+from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
@@ -15,6 +16,8 @@ from tqdm import tqdm
 warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 sys.setrecursionlimit(40000)
+root_dir = Path(__file__).parent
+np.random.seed(42)
 
 # PREPROCESSING PARAMS
 col_size = [(96, 96, 64), (96, 96, 96), (112, 112, 64), (64, 64, 32)]
@@ -114,7 +117,7 @@ class Preprocessor:
                     start_x1, start_x1 + crop_rows1, start_y1, start_y1 + crop_cols1, start_z1, start_z1 + crop_deps1)
                 box2 = (
                     start_x2, start_x2 + crop_rows2, start_y2, start_y2 + crop_cols2, start_z2, start_z2 + crop_deps2)
-                iou = self.self.cal_iou(box1, box2)
+                iou = self.cal_iou(box1, box2)
                 # print(iou, start_x1, start_y1, start_z1, start_x2, start_y2, start_z2)
                 if iou > 0.3:
                     break
@@ -203,8 +206,8 @@ class Preprocessor:
             return crop_window1[:, :, :input_depth], crop_window2[:, :, :input_depth], np.stack(local_windows, axis=0)
 
     def get_self_learning_data(self):
-        file_list = glob(os.path.join(self.config.DATA_DIR, '*.nii.gz'))
-        save_dir = self.config.SAVE_DIR
+        file_list = (root_dir / self.config.DATA_DIR).glob('*.nii.gz')
+        save_dir = str(root_dir / self.config.SAVE_DIR)
         os.makedirs(save_dir, exist_ok=True)
         for i, img_file in enumerate(tqdm(file_list)):
             img_name = os.path.split(img_file)[-1]
@@ -274,10 +277,10 @@ def parse_args():
     parser.add_option("--input_deps", dest="input_deps", help="input deps", default=32, type="int")
     parser.add_option("--crop_rows", dest="crop_rows", help="crop rows", default=64, type="int")
     parser.add_option("--crop_cols", dest="crop_cols", help="crop cols", default=64, type="int")
-    parser.add_option("--data", dest="data", help="the directory of BraTS dataset", default='/data1/luchixiang/LUNA16',
+    parser.add_option("--data", dest="data", help="the directory of BraTS dataset", default='BraTS_subset',
                       type="string")
     parser.add_option("--save", dest="save", help="the directory of processed 3D cubes",
-                      default='/data1/luchixiang/LUNA16/shuffle2.5', type="string")
+                      default='BraTS_preprocessed', type="string")
     parser.add_option("--scale", dest="scale", help="scale of the generator", default=16, type="int")
     options, _ = parser.parse_args()
 
@@ -295,17 +298,12 @@ def parse_args():
     return config
 
 
-def main():
+def run_preprocessing():
     config = parse_args()
 
-    if not os.path.exists(config.SAVE_DIR):
-        os.makedirs(config.SAVE_DIR)
-
     preprocessor = Preprocessor(config)
-
-    with Pool(8) as p:
-        p.map(preprocessor.get_self_learning_data)
+    preprocessor.get_self_learning_data()
 
 
 if __name__ == '__main__':
-    main()
+    run_preprocessing()

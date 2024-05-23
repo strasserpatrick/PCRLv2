@@ -1,6 +1,9 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
+
+from brats_preprocess import run_preprocessing
 
 root_dir = Path(__file__).parent.parent
 ground_truth_dir = root_dir / "BraTS_ground_truth"
@@ -8,7 +11,10 @@ comparison_dir = root_dir / "BraTS_preprocessed"
 
 
 def test_processing_equal():
-    # TODO: do the execution of the code here as well
+    for npy_file in comparison_dir.glob('*.npy'):
+        npy_file.unlink()
+
+    run_preprocessing()
 
     len_gt = len(list(ground_truth_dir.glob("*.npy")))
     len_comp = len(list(comparison_dir.glob("*.npy")))
