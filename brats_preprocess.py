@@ -5,6 +5,7 @@ from glob import glob
 from optparse import OptionParser
 from pathlib import Path
 from pprint import pprint
+from typing import Optional
 
 import SimpleITK as sitk
 import numpy as np
@@ -25,12 +26,18 @@ local_col_size_sampling_variants = [(32, 32, 16), (16, 16, 16), (32, 32, 32), (8
 class PreprocessingConfig:
     """
     Configuration for the preprocessing
-    TODO: add descriptions for each parameter
     :param input_rows: int, size of global window in x axis
     :param input_cols: int, size of global window in y axis
     :param input_depth: int, size of global window in z axis
+    :param scale: int, number of 3D pairs to generate
+    :param DATA_DIR: str, path to the dataset
+    :param SAVE_DIR: str, path to save the preprocessed data
+    :param local_input_rows: int, size of local window in x axis
+    :param local_input_cols: int, size of local window in y axis
+    :param local_input_depth: int, size of local window in z axis
     :param len_border: int, length of minimal distance to image boarder in x and y axis when cropping global windows
     :param len_border_z: int, length of minimal distance to image boarder in z axis when cropping global windows
+    :param len_depth: int, z dimensional extension of the global window
     """
     input_rows: int
     input_cols: int
@@ -41,13 +48,9 @@ class PreprocessingConfig:
     local_input_rows: int = 16
     local_input_cols: int = 16
     local_input_depth: int = 16
-    hu_max: float = 1000.0
-    hu_min: float = -1000.0
-    HU_thred: float = (-150.0 - hu_min) / (hu_max - hu_min)
     len_border: int = 70
     len_border_z: int = 15
     len_depth: int = 3
-    lung_min: float = 0.7
     lung_max: float = 0.15
 
 
@@ -82,6 +85,21 @@ class PCRLv2Preprocessor:
         img_array = img_array.transpose(2, 1, 0)
         self.local_global_3d_cube_generator(img_array, save_dir, img_name[:-7])
 
+    @staticmethod
+    def _z_normalization(img_array):
+        """
+        Normalizes the image using z-score normalization.
+        :param img_array: np.array, 3D image
+        :return: np.array, normalized image
+        """
+        mean = img_array.mean()
+        std = img_array.std()
+
+        img_array -= mean
+        img_array /= max(std, 1e-8)
+
+        return img_array
+
     def local_global_3d_cube_generator(self, img_array, save_dir, file_name):
         """
         Generates 3D cubes from the image and saves them to the disk
@@ -93,14 +111,11 @@ class PCRLv2Preprocessor:
 
         :return: None
         """
-        # Normalize HU values
-        img_array[img_array < self.config.hu_min] = self.config.hu_min
-        img_array[img_array > self.config.hu_max] = self.config.hu_max
-        img_array = 1.0 * (img_array - self.config.hu_min) / (self.config.hu_max - self.config.hu_min)
+        normalized_img_array = self._z_normalization(img_array)
 
         # generate 3d pairs
         for i in range(self.config.scale):
-            crop_window1, crop_window2, local_windows = self.crop_pair(img_array)
+            crop_window1, crop_window2, local_windows = self.crop_pair(normalized_img_array)
             crop_window = np.stack((crop_window1, crop_window2), axis=0)
             np.save(os.path.join(save_dir, file_name + '_global_' + str(i) + '.npy'), crop_window)
             np.save(os.path.join(save_dir, file_name + '_local_' + str(i) + '.npy'), local_windows)
@@ -186,7 +201,6 @@ class PCRLv2Preprocessor:
 
             if np.sum(d_img1) > self.config.lung_max * crop_cols1 * crop_deps1 * crop_rows1:
                 continue
-            # print(np.sum(d_img1))
             if np.sum(d_img2) > self.config.lung_max * crop_cols1 * crop_deps1 * crop_rows1:
                 continue
             # we start to crop the local windows
@@ -246,9 +260,8 @@ class PCRLv2Preprocessor:
 
             # sample the box start coordinates of the crop windows
             # the end coordinates are start + crop param
-            # a minimum distance to the boarder is enforced by the len_boarder parameter
+            # a minimum distance to the boarder is enforced by the len_border parameter
             # additionally, for the z axis, a minimum distance to the top and bottom is enforced by len_border_z
-            # TODO: what is len_depth in comparison to crop_deps?
             start_x1 = np.random.randint(0 + self.config.len_border,
                                          size_x - crop_rows1 - 1 - self.config.len_border)
             start_y1 = np.random.randint(0 + self.config.len_border,
