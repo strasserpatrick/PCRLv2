@@ -52,7 +52,7 @@ class PreprocessingConfig:
     len_border_z: int = 15
     len_depth: int = 3
     lung_max: float = 0.15
-
+    HU_thred: float = 0.425
 
 class PCRLv2Preprocessor:
     def __init__(self, config):
@@ -167,42 +167,16 @@ class PCRLv2Preprocessor:
                                        self.config.input_depth + self.config.len_depth),
                                       preserve_range=True,
                                       )
-            t_img1 = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
-            d_img1 = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
-            t_img2 = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
-            d_img2 = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
-            for d in range(self.config.input_depth):
-                for i in range(self.config.input_rows):
-                    for j in range(self.config.input_cols):
-                        for k in range(self.config.len_depth):
-                            if crop_window1[i, j, d + k] >= self.config.HU_thred:
-                                t_img1[i, j, d] = crop_window1[i, j, d + k]
-                                d_img1[i, j, d] = k
-                                break
-                            if k == self.config.len_depth - 1:
-                                d_img1[i, j, d] = k
-            for d in range(self.config.input_depth):
-                for i in range(self.config.input_rows):
-                    for j in range(self.config.input_cols):
-                        for k in range(self.config.len_depth):
-                            if crop_window2[i, j, d + k] >= self.config.HU_thred:
-                                t_img2[i, j, d] = crop_window2[i, j, d + k]
-                                d_img2[i, j, d] = k
-                                break
-                            if k == self.config.len_depth - 1:
-                                d_img2[i, j, d] = k
 
-            d_img1 = d_img1.astype('float32')
-            d_img1 /= (self.config.len_depth - 1)
-            d_img1 = 1.0 - d_img1
-            d_img2 = d_img2.astype('float32')
-            d_img2 /= (self.config.len_depth - 1)
-            d_img2 = 1.0 - d_img2
+            t_img1, d_img1 = self._intensity_normalization(crop_window1)
+            t_img2, d_img2 = self._intensity_normalization(crop_window2)
 
+            # check if there are too many datapoints
             if np.sum(d_img1) > self.config.lung_max * crop_cols1 * crop_deps1 * crop_rows1:
                 continue
             if np.sum(d_img2) > self.config.lung_max * crop_cols1 * crop_deps1 * crop_rows1:
                 continue
+
             # we start to crop the local windows
             x_min = min(start_x1, start_x2)
             x_max = max(end_x1, end_x2)
@@ -230,6 +204,26 @@ class PCRLv2Preprocessor:
                 local_windows.append(local_window)
             return crop_window1[:, :, :self.config.input_depth], crop_window2[:, :, :self.config.input_depth], np.stack(
                 local_windows, axis=0)
+
+    def _intensity_normalization(self, crop_window):
+        t_img = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
+        d_img = np.zeros((self.config.input_rows, self.config.input_cols, self.config.input_depth), dtype=float)
+
+        for d in range(self.config.input_depth):
+            for i in range(self.config.input_rows):
+                for j in range(self.config.input_cols):
+                    for k in range(self.config.len_depth):
+                        if crop_window[i, j, d + k] >= self.config.HU_thred:
+                            t_img[i, j, d] = crop_window[i, j, d + k]
+                            d_img[i, j, d] = k
+                        elif k == self.config.len_depth - 1:
+                            d_img[i, j, d] = k
+
+        d_img = d_img.astype('float32')
+        d_img /= (self.config.len_depth - 1)
+        d_img = 1.0 - d_img
+
+        return t_img, d_img
 
     def _sample_global_windows(self, image_sizes, min_iou: float = 0.3):
         """
