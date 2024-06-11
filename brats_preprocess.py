@@ -5,7 +5,6 @@ from glob import glob
 from optparse import OptionParser
 from pathlib import Path
 from pprint import pprint
-from typing import Optional
 
 import SimpleITK as sitk
 import numpy as np
@@ -38,6 +37,10 @@ class PreprocessingConfig:
     :param len_border: int, length of minimal distance to image boarder in x and y axis when cropping global windows
     :param len_border_z: int, length of minimal distance to image boarder in z axis when cropping global windows
     :param len_depth: int, z dimensional extension of the global window
+    :param lung_max: float, maximum ratio of data points in the global window that can be lung
+    :param hu_max: float, maximum Hounsfield unit value
+    :param hu_min: float, minimum Hounsfield unit value
+    :param hu_threshold: float, threshold for Hounsfield intensity normalization
     """
     input_rows: int
     input_cols: int
@@ -52,7 +55,10 @@ class PreprocessingConfig:
     len_border_z: int = 15
     len_depth: int = 3
     lung_max: float = 0.15
-    HU_thred: float = 0.425
+    hu_max: float = 1000.0
+    hu_min: float = -1000.0
+    hu_threshold: float = (-150.0 - hu_min) / (hu_max - hu_min)
+
 
 class PCRLv2Preprocessor:
     def __init__(self, config):
@@ -100,6 +106,19 @@ class PCRLv2Preprocessor:
 
         return img_array
 
+    def _hu_normalization(self, img_array):
+        """
+        Normalizes the image using Hounsfield unit normalization.
+        :param img_array: np.array, 3D image
+        :return: np.array, normalized image
+        """
+
+        img_array[img_array < self.config.hu_min] = self.config.hu_min
+        img_array[img_array > self.config.hu_max] = self.config.hu_max
+        img_array = 1.0 * (img_array - self.config.hu_min) / (self.config.hu_max - self.config.hu_min)
+
+        return img_array
+
     def local_global_3d_cube_generator(self, img_array, save_dir, file_name):
         """
         Generates 3D cubes from the image and saves them to the disk
@@ -111,7 +130,7 @@ class PCRLv2Preprocessor:
 
         :return: None
         """
-        normalized_img_array = self._z_normalization(img_array)
+        normalized_img_array = self._hu_normalization(img_array)
 
         # generate 3d pairs
         for i in range(self.config.scale):
@@ -213,10 +232,11 @@ class PCRLv2Preprocessor:
             for i in range(self.config.input_rows):
                 for j in range(self.config.input_cols):
                     for k in range(self.config.len_depth):
-                        if crop_window[i, j, d + k] >= self.config.HU_thred:
+                        if crop_window[i, j, d + k] >= self.config.hu_threshold:
                             t_img[i, j, d] = crop_window[i, j, d + k]
                             d_img[i, j, d] = k
-                        elif k == self.config.len_depth - 1:
+                            break
+                        if k == self.config.len_depth - 1:
                             d_img[i, j, d] = k
 
         d_img = d_img.astype('float32')
@@ -333,10 +353,7 @@ class PCRLv2Preprocessor:
         transform = sitk.Transform()
         transform.SetIdentity()
 
-        outsize = [0, 0, 0]
-        outsize[0] = int(input_size[0] * input_spacing[0] / out_spacing[0] + 0.5)
-        outsize[1] = int(input_size[1] * input_spacing[1] / out_spacing[1] + 0.5)
-        outsize[2] = int(input_size[2] * input_spacing[2] / out_spacing[2] + 0.5)
+        outsize = [int(input_size[i] * input_spacing[i] / out_spacing[i] + 0.5) for i in range(3)]
 
         resampler = sitk.ResampleImageFilter()
         resampler.SetTransform(transform)
