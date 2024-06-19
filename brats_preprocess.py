@@ -92,6 +92,7 @@ class PCRLv2Preprocessor:
         :param img_array: np.array, 3D image
         :return: np.array, normalized image
         """
+        img_array = img_array.astype(float)
         mean = img_array.mean()
         std = img_array.std()
 
