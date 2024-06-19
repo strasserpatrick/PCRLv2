@@ -38,9 +38,6 @@ class PreprocessingConfig:
     :param len_border_z: int, length of minimal distance to image boarder in z axis when cropping global windows
     :param len_depth: int, z dimensional extension of the global window
     :param lung_max: float, maximum ratio of data points in the global window that can be lung
-    :param hu_max: float, maximum Hounsfield unit value
-    :param hu_min: float, minimum Hounsfield unit value
-    :param hu_threshold: float, threshold for Hounsfield intensity normalization
     """
     input_rows: int
     input_cols: int
@@ -55,9 +52,6 @@ class PreprocessingConfig:
     len_border_z: int = 15
     len_depth: int = 3
     lung_max: float = 0.15
-    hu_max: float = 1000.0
-    hu_min: float = -1000.0
-    hu_threshold: float = (-150.0 - hu_min) / (hu_max - hu_min)
 
 
 class PCRLv2Preprocessor:
@@ -130,7 +124,7 @@ class PCRLv2Preprocessor:
 
         :return: None
         """
-        normalized_img_array = self._hu_normalization(img_array)
+        normalized_img_array = self._z_normalization(img_array)
 
         # generate 3d pairs
         for i in range(self.config.scale):
