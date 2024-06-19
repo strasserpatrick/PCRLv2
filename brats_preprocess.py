@@ -81,7 +81,7 @@ class PCRLv2Preprocessor:
         """
         img_name = os.path.split(img_file)[-1]
         img_array = self._load_sitk_with_resample(img_file)
-        img_array = sitk.GetArrayFromImage(img_array)
+        img_array = sitk.GetArrayFromImage(img_array).astype(float)
         img_array = img_array.transpose(2, 1, 0)
         self.local_global_3d_cube_generator(img_array, save_dir, img_name[:-7])
 
@@ -92,7 +92,7 @@ class PCRLv2Preprocessor:
         :param img_array: np.array, 3D image
         :return: np.array, normalized image
         """
-        img_array = img_array.astype(float)
+        img_array = img_array
         mean = img_array.mean()
         std = img_array.std()
 
