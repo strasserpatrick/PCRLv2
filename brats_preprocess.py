@@ -181,15 +181,6 @@ class PCRLv2Preprocessor:
                                       preserve_range=True,
                                       )
 
-            t_img1, d_img1 = self._intensity_normalization(crop_window1)
-            t_img2, d_img2 = self._intensity_normalization(crop_window2)
-
-            # check if there are too many datapoints
-            if np.sum(d_img1) > self.config.lung_max * crop_cols1 * crop_deps1 * crop_rows1:
-                continue
-            if np.sum(d_img2) > self.config.lung_max * crop_cols1 * crop_deps1 * crop_rows1:
-                continue
-
             # we start to crop the local windows
             x_min = min(start_x1, start_x2)
             x_max = max(end_x1, end_x2)
